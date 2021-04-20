@@ -116,10 +116,10 @@
   dependencies:
     "@types/node" "*"
 
-"@wasm-tool/rollup-plugin-rust@^1.0.5":
-  version "1.0.5"
-  resolved "https://registry.yarnpkg.com/@wasm-tool/rollup-plugin-rust/-/rollup-plugin-rust-1.0.5.tgz#0cf53fa1c512ba5486aafcb3f857e6dd41604228"
-  integrity sha512-qVkXNlU3KQmk1zRAIa45yY4WdFA0nlLM8hKv7WGxZptiZA/L+BAscg62U7eqDKjLzCzpUmMXHwN2NHiKrsOvkA==
+"@wasm-tool/rollup-plugin-rust@^1.0.6":
+  version "1.0.6"
+  resolved "https://registry.yarnpkg.com/@wasm-tool/rollup-plugin-rust/-/rollup-plugin-rust-1.0.6.tgz#737998c33edce952d68d596ffd487fdc96361bd6"
+  integrity sha512-PsjXJcUigs7C5tE0xNMED1JDvXYVrswfUmTbzQGNRDlc178Y9fM1zeDtb/Lfgh763G694SOWwA970ioOAsLKIw==
   dependencies:
     glob "^7.1.6"
     rimraf "^3.0.0"
