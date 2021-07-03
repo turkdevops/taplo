@@ -292,11 +292,18 @@ async fn update_configuration(mut context: Context<World>, configuration: Option
 
                                 spawn(async move {
                                     let res = client.get(&path).send().await.unwrap();
-                                    let schema: RootSchema = res
+
+                                    let schema: RootSchema = match res
                                         .json()
                                         .await
                                         .map_err::<anyhow::Error, _>(Into::into)
-                                        .unwrap();
+                                    {
+                                        Ok(s) => s,
+                                        Err(e) => {
+                                            log_error!("failed to retrieve schema from {}: {}", &path, e);
+                                            return;
+                                        }
+                                    };
 
                                     let s = schema.clone();
 
@@ -542,7 +549,11 @@ pub(crate) async fn completion(
 
     drop(w);
 
-    let schema: RootSchema = match WorldState::get_schema(&schema_path, context.clone()).await {
+    let schema: RootSchema = match WorldState::get_schema(
+        &uri,
+        &schema_path,
+        context.clone(),
+    ).await {
         Ok(s) => s,
         Err(err) => {
             log_error!("failed to load schema ({}): {}", &schema_path, err);
@@ -583,7 +594,11 @@ pub(crate) async fn hover(
 
     drop(w);
 
-    let schema: RootSchema = match WorldState::get_schema(&schema_path, context.clone()).await {
+    let schema: RootSchema = match WorldState::get_schema(
+        &uri,
+        &schema_path,
+        context.clone()
+    ).await {
         Ok(s) => s,
         Err(err) => {
             log_error!("failed to load schema ({}): {}", &schema_path, err);
@@ -820,7 +835,11 @@ pub(crate) async fn links(
 
     drop(w);
 
-    let schema: RootSchema = match WorldState::get_schema(&schema_path, context.clone()).await {
+    let schema: RootSchema = match WorldState::get_schema(
+        &uri,
+        &schema_path,
+        context.clone()
+    ).await {
         Ok(s) => s,
         Err(err) => {
             log_error!("failed to load schema: {}", err);

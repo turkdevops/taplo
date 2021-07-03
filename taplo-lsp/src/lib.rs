@@ -31,6 +31,9 @@ pub mod external;
 #[macro_use]
 pub mod external;
 
+#[cfg(target_arch = "wasm32")]
+use external::UrlExt;
+
 mod handlers;
 mod msg_ext;
 mod utils;
@@ -88,31 +91,22 @@ impl WorldState {
         let mut incomplete = Vec::new();
 
         if let Some(c) = &self.taplo_config {
-            if let Some(ws) = &self.workspace_uri {
-                if let Some(p) = pathdiff::diff_paths(Path::new(uri.path()), ws.path()) {
-                    if let Some(p) = p.to_str() {
-                        match c.get_formatter_options(Some(p), Some(default_opts.clone())) {
-                            Ok((opts, inc)) => {
-                                default_opts = opts;
-                                incomplete.extend(inc);
-                            }
-                            Err(err) => {
-                                log_warn!("invalid config: {}", err);
-                            }
-                        }
+            if let Some(p) = uri.to_file_path().ok() {
+                let p = self
+                    .workspace_uri
+                    .as_ref()
+                    .and_then(|ws| ws.to_file_path().ok())
+                    .and_then(|ws| pathdiff::diff_paths(Path::new(&p), ws))
+                    .unwrap_or(p);
+
+                match c.get_formatter_options(p.to_str(), Some(default_opts.clone())) {
+                    Ok((opts, inc)) => {
+                        default_opts = opts;
+                        incomplete.extend(inc);
                     }
-                }
-            }
-
-            let p = uri.path();
-
-            match c.get_formatter_options(Some(p), Some(default_opts.clone())) {
-                Ok((opts, inc)) => {
-                    default_opts = opts;
-                    incomplete.extend(inc);
-                }
-                Err(err) => {
-                    log_warn!("invalid config: {}", err);
+                    Err(err) => {
+                        log_warn!("invalid config: {}", err);
+                    }
                 }
             }
         }
@@ -120,6 +114,22 @@ impl WorldState {
         (default_opts, incomplete)
     }
 
+    /// For the given `Url`, if it exists in the map of known documents,
+    /// try to parse the schema path from a toml comment.
+    ///
+    /// Example:
+    ///
+    /// ```
+    /// #:schema ./foo/bar
+    /// <rest of toml file>
+    /// ```
+    ///
+    /// returns `"/.foo/bar"`.
+    ///
+    /// If the file does not contain such a schema comment, we look into the taplo config,
+    /// which assigns file regexes (relative to the `workspace_uri`) to schema files.
+    ///
+    /// If nothing is found, returns `None`.
     fn get_schema_name(&self, uri: &Url) -> Option<String> {
         match self.documents.get(uri) {
             Some(doc) => {
@@ -138,33 +148,25 @@ impl WorldState {
         }
 
         if let Some(c) = &self.taplo_config {
-            if let Some(ws) = &self.workspace_uri {
-                if let Some(p) = pathdiff::diff_paths(Path::new(uri.path()), ws.path()) {
-                    if let Some(p) = p.to_str() {
-                        match c.get_schema_path(p) {
-                            Ok(p) => {
-                                if p.is_some() {
-                                    return p;
-                                }
-                            }
-                            Err(err) => {
-                                log_warn!("invalid config: {}", err);
+            if let Some(p) = uri.to_file_path().ok() {
+                let p = self
+                    .workspace_uri
+                    .as_ref()
+                    .and_then(|ws| ws.to_file_path().ok())
+                    .and_then(|ws| pathdiff::diff_paths(Path::new(&p), ws))
+                    .unwrap_or(p);
+
+                if let Some(p) = p.to_str() {
+                    match c.get_schema_path(p) {
+                        Ok(p) => {
+                            if p.is_some() {
+                                return p;
                             }
                         }
+                        Err(err) => {
+                            log_warn!("invalid config: {}", err);
+                        }
                     }
-                }
-            }
-
-            let p = uri.path();
-
-            match c.get_schema_path(p) {
-                Ok(p) => {
-                    if p.is_some() {
-                        return p;
-                    }
-                }
-                Err(err) => {
-                    log_warn!("invalid config: {}", err);
                 }
             }
         }
@@ -188,30 +190,34 @@ impl WorldState {
 
     fn workspace_path(&self) -> Option<PathBuf> {
         match &self.workspace_uri {
-            Some(uri) => Some(PathBuf::from(uri.path())),
+            Some(uri) => uri.to_file_path().ok(),
             None => None,
         }
     }
 
-    fn workspace_absolute<P: AsRef<Path>>(&self, path: P) -> Option<PathBuf> {
-        let workspace = &self.workspace_uri;
-
-        match workspace {
-            Some(uri) => Some(Path::new(uri.path()).join(path)),
-            None => None,
-        }
-    }
-
+    /// Get the schema for a given file and schema path/url.
     async fn get_schema(
+        // File to get the schema for.
+        for_url: &Url,
+        // Path of the schema file, as either
+        //
+        // - a `taplo://` url
+        // - an absolute `file://` path
+        // - an absolute path (same as `file://`)
+        // - a `http://` or `https://`
+        // - or a relative path, which is resolved relative to the `for_url` (this should work for both local files and remote files)
         mut path: &str,
         mut context: Context<World>,
     ) -> Result<RootSchema, anyhow::Error> {
+
+        // resolve taplo://
         if path.starts_with(&format!("{}://", BUILTIN_SCHEME)) {
             if path == "taplo://taplo.toml" {
                 Ok(schema_for!(taplo_cli::config::Config))
             } else {
                 Err(anyhow!("invalid builtin schema: {}", path))
             }
+        // resolve http://, https://
         } else if path.starts_with("http://") || path.starts_with("https://") {
             let w = context.world().lock().await;
 
@@ -275,19 +281,47 @@ impl WorldState {
             }
 
             Ok(schema)
+        // resolve file://
         } else if path.starts_with("file://") {
             path = path.trim_start_matches("file://");
             serde_json::from_slice(&read_file(path).await?).map_err(Into::into)
+        // same as file:// for absolute paths
         } else if is_absolute_path(path) {
             serde_json::from_slice(&read_file(path).await?).map_err(Into::into)
+        // resolve relative paths, relative to the `for_url`.
         } else {
-            match context.world().lock().await.workspace_absolute(path) {
-                Some(p) => serde_json::from_slice(&read_file(p.to_str().unwrap()).await?)
-                    .map_err(Into::into),
-                None => Err(anyhow!("cannot determine workspace root for relative path")),
+            // This should in theory work for any type of url, so if `for_url` is
+            // `http://foo.bar/baz.toml`
+            // then `./schema.json` ould resolve to
+            // `http://foo.bar/schema.json`
+            // which sounds like something one would want.
+            // However, implementing this will take some more refactoring, so for now we error out.
+            if for_url.scheme() != "file" {
+                return Err(anyhow!(
+                    "File {} is trying to load relative schema {}, but we only support loading relative schemas from local files right now, not {}",
+                    for_url,
+                    path,
+                    for_url.scheme()
+                ))
+            }
+            match for_url.join(path) {
+                Ok(schema) => serde_json::from_slice(
+                    &read_file(
+                        schema.to_file_path().expect(&format!("{} has to be a file path here", schema))
+                            // this should be utf-8 safe since it came from an URL
+                            .to_str().unwrap()
+                    ).await?
+                ).map_err(Into::into),
+                Err(err) => Err(anyhow!(
+                    "Cannot resolve relative schema {}, coming from file {}. Error: {}",
+                    path,
+                    for_url,
+                    err
+                ))
             }
         }
     }
+
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
