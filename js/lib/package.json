@@ -14,7 +14,7 @@
   "dependencies": {},
   "devDependencies": {
     "@wasm-tool/rollup-plugin-rust": "^1.0.5",
-    "rollup": "^2.33.1",
+    "rollup": "^2.52.0",
     "rollup-plugin-terser": "^7.0.2",
     "rollup-plugin-typescript2": "^0.29.0",
     "tslib": "^2.0.3",
