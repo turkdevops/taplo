@@ -1,5 +1,44 @@
 # Change Log
 
+## 0.14.1
+
+### Fixes
+
+- Formatter fixes
+
+## 0.14.0
+
+### Features
+
+- Syntax highlight for comment directives (comments starting with `#:`)
+- Syntax highlight in markdown 
+
+### Fixes
+
+- Formatter fixes regarding comments
+
+## 0.13.1
+
+### Features
+
+- Added `indentEntries` formatter option that was supposed to be in `0.13.0`
+
+### Fixes
+
+- Formatter indentation fixes
+
+## 0.13.0
+
+### Features
+
+- New formatting options: `alignComments` and `compactEntries`
+
+### Fixes
+
+- Completely reworked formatting code
+- Fixed various false errors
+- The `columnWidth` formatter option is more closely enforced
+
 ## 0.12.3
 
 ### Fixes
