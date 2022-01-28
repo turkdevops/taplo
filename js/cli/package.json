@@ -14,7 +14,7 @@
   "author": "tamasfe",
   "license": "MIT",
   "dependencies": {
-    "fast-glob": "^3.2.7",
+    "fast-glob": "^3.2.9",
     "node-fetch": "^2.6.1"
   },
   "devDependencies": {
