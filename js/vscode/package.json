@@ -315,7 +315,7 @@
   },
   "dependencies": {
     "deep-equal": "^2.0.5",
-    "node-fetch": "^2.6.4",
+    "node-fetch": "^3.2.10",
     "vscode-languageclient": "^7.0.0"
   },
   "devDependencies": {
